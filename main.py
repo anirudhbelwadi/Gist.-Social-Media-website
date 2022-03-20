@@ -354,13 +354,14 @@ def share():
         data = cur.fetchall()
         con.close()
         friends = fetchFriends(session['username'])
+        friends.append('Broadcast')
         if(len(friends) == 0):
             return render_template("share.html", data=data[0], msg="You have no friends yet, connet with friends to share")
         return render_template("share.html", data=data[0], friends=friends)
     return redirect('home')
 
 
-@app.route('/shareevent', methods=['POST'])
+@app.route('/shareevent', methods = ['POST'])
 def shareevent():
     if request.method == 'POST':
         shareuser = "Shared by: " + session['username']
@@ -370,14 +371,75 @@ def shareevent():
         stime = request.form['stime']
         etime = request.form['etime']
         descrip = request.form['description']
+        eventId = request.form['eventId']
+        if username == "Broadcast":
+            con = sqlite3.connect('database.db')
+            cur = con.cursor()
+            cur.execute("SELECT username FROM Users")
+            data = cur.fetchall()
+            con.close()
+            for i in data:
+                if i[0] != session['username']:
+                    con = sqlite3.connect('database.db')
+                    cur = con.cursor()
+                    broadcastUser = "Broadcasted by: " + session['username']
+                    cur.execute("INSERT INTO eventInvitation (username, eventName, date, startTime, endTime, description, eventId, share) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (i[0], eventname, date, stime, etime, descrip, eventId,  broadcastUser))
+                    con.commit()
+                    con.close()
         eventId = get_random_number()
         con = sqlite3.connect('database.db')
-        con.execute("INSERT INTO events (username, eventName, date, startTime, endTime, description, eventId, share) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    (username, eventname, date, stime, etime, descrip, eventId, shareuser))
+        con.execute("INSERT INTO events (username, eventName, date, startTime, endTime, description, eventId, share) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (username, eventname, date, stime, etime, descrip, eventId, shareuser))
         con.commit()
         con.close()
         return redirect(url_for('events'))
 
+@app.route('/eventInvitations', methods = ['GET'])
+def eventInvitations():
+    if request.method == 'GET':
+        con = sqlite3.connect('database.db')
+        cur = con.cursor()
+        cur.execute("SELECT * FROM eventInvitation WHERE username = ?", (session['username'],))
+        data = cur.fetchall()
+        print(data)
+        con.close()
+        return render_template('eventInvitations.html', data=data)
+
+
+@app.route('/declineInvitation', methods = ['POST'])
+def declineInvitation():
+    if request.method == 'POST':
+        username = session['username']
+        eventId = request.form['eventId']
+        con = sqlite3.connect('database.db')
+        cur = con.cursor()
+        cur.execute("DELETE FROM eventInvitation WHERE username = ? AND eventId = ?", (username, eventId))
+        con.commit()
+        con.close()
+        return redirect(url_for('eventInvitations'))
+
+
+@app.route('/acceptInvitation', methods = ['POST'])
+def acceptInvitation():
+    if request.method == 'POST':
+        eventId = request.form['eventId']
+        username = request.form['username']
+        con = sqlite3.connect('database.db')
+        cur = con.cursor()
+        cur.execute("SELECT * FROM eventInvitation WHERE eventId = ? AND username = ?", (eventId, username))
+        data = cur.fetchall()
+        print(data)
+        con.close()
+        con = sqlite3.connect('database.db')
+        cur = con.cursor()
+        cur.execute("INSERT INTO events (username, eventName, date, startTime, endTime, description, eventId, share) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (data[0][0], data[0][1], data[0][2], data[0][3], data[0][4], data[0][5], data[0][6], data[0][7]))
+        con.commit()
+        con.close()
+        con = sqlite3.connect('database.db')
+        cur = con.cursor()
+        cur.execute("DELETE FROM eventInvitation WHERE eventId = ? AND username = ?", (eventId, username))
+        con.commit()
+        con.close()
+        return redirect(url_for('events'))
 
 @app.route('/statusupdate', methods=['POST', 'GET'])
 def statusupdate():
